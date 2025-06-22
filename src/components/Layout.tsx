@@ -1,16 +1,29 @@
 
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, Navigate } from 'react-router-dom';
 import { Home, BarChart3, Users, Package, MapPin, Bell, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout = ({ children }: LayoutProps) => {
-  const [userRole, setUserRole] = useState<string>('admin'); // Demo role
+  const { user, userRole, signOut, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, roles: ['admin', 'distributor', 'agent', 'customer'] },
@@ -21,7 +34,7 @@ const Layout = ({ children }: LayoutProps) => {
   ];
 
   const filteredNavigation = navigation.filter(item => 
-    item.roles.includes(userRole)
+    userRole && item.roles.includes(userRole)
   );
 
   return (
@@ -49,8 +62,10 @@ const Layout = ({ children }: LayoutProps) => {
               </Button>
               <div className="flex items-center space-x-2">
                 <User className="h-6 w-6 text-gray-400" />
-                <span className="text-sm font-medium text-gray-700 capitalize">{userRole}</span>
-                <Button variant="ghost" size="sm">
+                <span className="text-sm font-medium text-gray-700 capitalize">
+                  {userRole || 'User'} - {user.email}
+                </span>
+                <Button variant="ghost" size="sm" onClick={signOut}>
                   <LogOut className="h-4 w-4" />
                 </Button>
               </div>

@@ -1,124 +1,185 @@
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, X, Clock, MapPin } from 'lucide-react';
-
-interface Delivery {
-  id: string;
-  customerName: string;
-  address: string;
-  product: string;
-  quantity: number;
-  status: 'pending' | 'delivered' | 'missed' | 'skipped';
-  scheduledTime: string;
-  area: string;
-}
-
-const mockDeliveries: Delivery[] = [
-  {
-    id: '1',
-    customerName: 'Rajesh Kumar',
-    address: '123 MG Road, Sector 15',
-    product: 'Fresh Milk',
-    quantity: 2,
-    status: 'pending',
-    scheduledTime: '07:00 AM',
-    area: 'Sector 15'
-  },
-  {
-    id: '2',
-    customerName: 'Priya Sharma',
-    address: '456 Park Street, Sector 12',
-    product: 'Full Cream Milk',
-    quantity: 1,
-    status: 'delivered',
-    scheduledTime: '07:30 AM',
-    area: 'Sector 12'
-  },
-  {
-    id: '3',
-    customerName: 'Amit Patel',
-    address: '789 Lake View, Sector 18',
-    product: 'Toned Milk',
-    quantity: 3,
-    status: 'missed',
-    scheduledTime: '08:00 AM',
-    area: 'Sector 18'
-  }
-];
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Package, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const DeliveryTable = () => {
-  const [deliveries, setDeliveries] = useState<Delivery[]>(mockDeliveries);
+  const { userRole, user } = useAuth();
 
-  const updateDeliveryStatus = (id: string, newStatus: Delivery['status']) => {
-    setDeliveries(prev => 
-      prev.map(delivery => 
-        delivery.id === id ? { ...delivery, status: newStatus } : delivery
-      )
+  const { data: deliveries, isLoading } = useQuery({
+    queryKey: ['deliveries', userRole, user?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from('deliveries')
+        .select(`
+          *,
+          subscriptions (
+            quantity,
+            products (name, price),
+            profiles (full_name, address)
+          )
+        `)
+        .order('delivery_date', { ascending: false })
+        .limit(10);
+
+      // Filter based on user role
+      if (userRole === 'agent') {
+        query = query.eq('agent_id', user?.id);
+      } else if (userRole === 'customer') {
+        query = query.eq('subscriptions.user_id', user?.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && !!userRole
+  });
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'delivered': return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'missed': return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'scheduled': return <Clock className="h-4 w-4 text-blue-600" />;
+      default: return <Package className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'delivered': return 'bg-green-100 text-green-800';
+      case 'missed': return 'bg-red-100 text-red-800';
+      case 'scheduled': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const updateDeliveryStatus = async (deliveryId: string, status: string) => {
+    const { error } = await supabase
+      .from('deliveries')
+      .update({ 
+        status, 
+        delivered_at: status === 'delivered' ? new Date().toISOString() : null 
+      })
+      .eq('id', deliveryId);
+
+    if (!error) {
+      // Refetch data
+      window.location.reload();
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Deliveries</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+          </div>
+        </CardContent>
+      </Card>
     );
-  };
-
-  const getStatusBadge = (status: Delivery['status']) => {
-    const statusConfig = {
-      pending: { label: 'Pending', className: 'bg-yellow-100 text-yellow-800' },
-      delivered: { label: 'Delivered', className: 'bg-green-100 text-green-800' },
-      missed: { label: 'Missed', className: 'bg-red-100 text-red-800' },
-      skipped: { label: 'Skipped', className: 'bg-gray-100 text-gray-800' }
-    };
-
-    const config = statusConfig[status];
-    return <Badge className={config.className}>{config.label}</Badge>;
-  };
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <MapPin className="h-5 w-5 mr-2 text-blue-600" />
-          Today's Deliveries
+        <CardTitle className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          Recent Deliveries
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {deliveries.map((delivery) => (
-            <div key={delivery.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900">{delivery.customerName}</h3>
-                  {getStatusBadge(delivery.status)}
-                </div>
-                <p className="text-sm text-gray-600 mb-1">{delivery.address}</p>
-                <div className="flex items-center text-sm text-gray-500">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {delivery.scheduledTime} • {delivery.product} ({delivery.quantity}L)
-                </div>
-              </div>
-              
-              {delivery.status === 'pending' && (
-                <div className="flex space-x-2 ml-4">
-                  <Button
-                    size="sm"
-                    onClick={() => updateDeliveryStatus(delivery.id, 'delivered')}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <Check className="h-4 w-4 mr-1" />
-                    Delivered
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => updateDeliveryStatus(delivery.id, 'missed')}
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Missed
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        {!deliveries || deliveries.length === 0 ? (
+          <div className="text-center py-8">
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No deliveries found</p>
+            <p className="text-sm text-gray-500">Use the simulate button to create sample data</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-3">Date</th>
+                  <th className="text-left p-3">Customer</th>
+                  <th className="text-left p-3">Product</th>
+                  <th className="text-left p-3">Quantity</th>
+                  <th className="text-left p-3">Status</th>
+                  {userRole === 'agent' && <th className="text-left p-3">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {deliveries.map((delivery: any) => (
+                  <tr key={delivery.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">
+                      {new Date(delivery.delivery_date).toLocaleDateString()}
+                    </td>
+                    <td className="p-3">
+                      <div>
+                        <p className="font-medium">
+                          {delivery.subscriptions?.profiles?.full_name || 'Unknown'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {delivery.subscriptions?.profiles?.address || 'No address'}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div>
+                        <p className="font-medium">
+                          {delivery.subscriptions?.products?.name || 'Unknown Product'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          ₹{delivery.subscriptions?.products?.price || 0}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      {delivery.subscriptions?.quantity || 1} L
+                    </td>
+                    <td className="p-3">
+                      <Badge className={getStatusColor(delivery.status)}>
+                        <div className="flex items-center gap-1">
+                          {getStatusIcon(delivery.status)}
+                          {delivery.status}
+                        </div>
+                      </Badge>
+                    </td>
+                    {userRole === 'agent' && (
+                      <td className="p-3">
+                        {delivery.status === 'scheduled' && (
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => updateDeliveryStatus(delivery.id, 'delivered')}
+                            >
+                              Mark Delivered
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => updateDeliveryStatus(delivery.id, 'missed')}
+                            >
+                              Mark Missed
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
