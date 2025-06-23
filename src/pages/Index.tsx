@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import DashboardCard from '@/components/DashboardCard';
 import DeliveryTable from '@/components/DeliveryTable';
 import DataControls from '@/components/DataControls';
+import AdminManagement from '@/components/AdminManagement';
 import { Package, Users, MapPin, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
@@ -86,7 +87,7 @@ const Index = () => {
           />
         </div>
 
-        {/* Quick Stats and Data Controls */}
+        {/* Quick Stats and Admin Controls */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
             <div className="flex items-center justify-between">
@@ -124,6 +125,17 @@ const Index = () => {
           {/* Data Controls - Only show for admin */}
           {userRole === 'admin' && <DataControls />}
         </div>
+
+        {/* Admin Management Section */}
+        {userRole === 'admin' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">User Management</h2>
+              <p className="text-gray-600">Manage agents and view customer information</p>
+            </div>
+            <AdminManagement />
+          </div>
+        )}
 
         {/* Delivery Management */}
         <DeliveryTable />

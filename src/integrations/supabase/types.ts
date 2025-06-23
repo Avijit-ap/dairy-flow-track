@@ -184,6 +184,7 @@ export type Database = {
         Row: {
           address: string | null
           area_id: string | null
+          assigned_agent_id: string | null
           created_at: string | null
           full_name: string | null
           id: string
@@ -193,6 +194,7 @@ export type Database = {
         Insert: {
           address?: string | null
           area_id?: string | null
+          assigned_agent_id?: string | null
           created_at?: string | null
           full_name?: string | null
           id: string
@@ -202,6 +204,7 @@ export type Database = {
         Update: {
           address?: string | null
           area_id?: string | null
+          assigned_agent_id?: string | null
           created_at?: string | null
           full_name?: string | null
           id?: string
@@ -286,6 +289,10 @@ export type Database = {
       get_user_role: {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      make_user_admin: {
+        Args: { user_email: string }
+        Returns: undefined
       }
     }
     Enums: {

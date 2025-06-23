@@ -9,9 +9,10 @@ interface AuthContextType {
   session: Session | null;
   userRole: string | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, options?: { role?: string; assignedAgent?: string }) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  inviteAgent: (email: string, fullName: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,16 +67,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, options?: { role?: string; assignedAgent?: string }) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          full_name: fullName
+          full_name: fullName,
+          role: options?.role || 'customer',
+          assigned_agent: options?.assignedAgent
         }
       }
     });
@@ -87,9 +90,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         variant: "destructive"
       });
     } else {
+      // Handle role assignment after signup
+      if (data.user && options?.role) {
+        setTimeout(async () => {
+          try {
+            // Update user role if not customer (customer is default)
+            if (options.role !== 'customer') {
+              await supabase
+                .from('user_roles')
+                .update({ role: options.role })
+                .eq('user_id', data.user.id);
+            }
+            
+            // Update profile with assigned agent if provided
+            if (options.assignedAgent) {
+              await supabase
+                .from('profiles')
+                .update({ assigned_agent_id: options.assignedAgent })
+                .eq('id', data.user.id);
+            }
+          } catch (err) {
+            console.error('Error updating user details:', err);
+          }
+        }, 1000);
+      }
+      
       toast({
         title: "Sign Up Successful",
-        description: "Please check your email to confirm your account.",
+        description: options?.role === 'agent' 
+          ? "Your agent account is pending approval. You'll receive an email once activated."
+          : "Please check your email to confirm your account.",
       });
     }
 
@@ -121,6 +151,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
+  const inviteAgent = async (email: string, fullName: string) => {
+    try {
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        data: {
+          full_name: fullName,
+          role: 'agent'
+        },
+        redirectTo: `${window.location.origin}/`
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Invitation Sent",
+        description: `Magic link sent to ${email}`,
+      });
+
+      return { error: null };
+    } catch (error: any) {
+      toast({
+        title: "Invitation Error",
+        description: error.message,
+        variant: "destructive"
+      });
+      return { error };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -129,7 +187,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loading,
       signUp,
       signIn,
-      signOut
+      signOut,
+      inviteAgent
     }}>
       {children}
     </AuthContext.Provider>
