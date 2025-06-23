@@ -1,16 +1,20 @@
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Package, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 const DeliveryTable = () => {
   const { userRole, user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const { data: deliveries, isLoading } = useQuery({
+  const { data: deliveries, isLoading, refetch } = useQuery({
     queryKey: ['deliveries', userRole, user?.id],
     queryFn: async () => {
       let query = supabase
@@ -37,8 +41,45 @@ const DeliveryTable = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!user && !!userRole
+    enabled: !!user && !!userRole,
+    refetchInterval: 5000 // Refetch every 5 seconds for real-time feel
   });
+
+  // Set up realtime subscription for deliveries
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('delivery-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'deliveries'
+        },
+        (payload) => {
+          console.log('Delivery updated:', payload);
+          // Invalidate and refetch deliveries
+          queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+          
+          // Show toast for real-time updates
+          if (payload.eventType === 'UPDATE') {
+            toast({
+              title: "Delivery Updated",
+              description: `Status changed to ${payload.new.status}`,
+              duration: 2000
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient, toast]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -68,8 +109,17 @@ const DeliveryTable = () => {
       .eq('id', deliveryId);
 
     if (!error) {
-      // Refetch data
-      window.location.reload();
+      toast({
+        title: "Status Updated",
+        description: `Delivery marked as ${status}`,
+      });
+      // No need to reload, realtime will handle the update
+    } else {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update delivery status",
+        variant: "destructive"
+      });
     }
   };
 
@@ -91,9 +141,19 @@ const DeliveryTable = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          Recent Deliveries
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Recent Deliveries
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => refetch()}
+            className="h-8"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -101,7 +161,9 @@ const DeliveryTable = () => {
           <div className="text-center py-8">
             <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">No deliveries found</p>
-            <p className="text-sm text-gray-500">Use the simulate button to create sample data</p>
+            <p className="text-sm text-gray-500">
+              {userRole === 'admin' ? 'Use the simulation tools to create sample data' : 'Check back later for updates'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -118,7 +180,7 @@ const DeliveryTable = () => {
               </thead>
               <tbody>
                 {deliveries.map((delivery: any) => (
-                  <tr key={delivery.id} className="border-b hover:bg-gray-50">
+                  <tr key={delivery.id} className="border-b hover:bg-gray-50 transition-colors">
                     <td className="p-3">
                       {new Date(delivery.delivery_date).toLocaleDateString()}
                     </td>

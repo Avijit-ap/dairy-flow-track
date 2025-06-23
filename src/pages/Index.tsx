@@ -6,11 +6,13 @@ import DataControls from '@/components/DataControls';
 import AdminManagement from '@/components/AdminManagement';
 import { Package, Users, MapPin, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useEffect } from 'react';
 
 const Index = () => {
   const { userRole } = useAuth();
+  const queryClient = useQueryClient();
 
   // Fetch dashboard stats
   const { data: stats } = useQuery({
@@ -47,8 +49,42 @@ const Index = () => {
         completedDeliveries: deliveredToday,
         pendingDeliveries: totalToday - deliveredToday
       };
-    }
+    },
+    refetchInterval: 5000 // Refresh every 5 seconds
   });
+
+  // Set up realtime subscription for dashboard updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'deliveries'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions'
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   return (
     <Layout>
@@ -57,6 +93,12 @@ const Index = () => {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h1>
           <p className="text-gray-600">Monitor your milk delivery operations in real-time</p>
+          {userRole === 'admin' && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+              <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
+              Real-time updates enabled
+            </div>
+          )}
         </div>
 
         {/* Key Metrics */}
