@@ -11,13 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Package } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Database } from '@/integrations/supabase/types';
+
+type UserRole = Database['public']['Enums']['user_role'];
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'customer' | 'agent'>('customer');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('customer');
   const [selectedAgent, setSelectedAgent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,14 +28,30 @@ const Auth = () => {
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: userRoles } = await supabase
         .from('user_roles')
-        .select(`
-          user_id,
-          profiles!inner(full_name)
-        `)
+        .select('user_id')
         .eq('role', 'agent');
-      return data || [];
+      
+      if (!userRoles) return [];
+
+      // Fetch profiles for each agent
+      const agentsWithProfiles = await Promise.all(
+        userRoles.map(async (userRole) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', userRole.user_id)
+            .single();
+          
+          return {
+            user_id: userRole.user_id,
+            profile
+          };
+        })
+      );
+
+      return agentsWithProfiles;
     }
   });
 
@@ -40,7 +59,6 @@ const Auth = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-      </div>
     );
   }
 
@@ -203,7 +221,7 @@ const Auth = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Account Type</Label>
-                    <Select value={selectedRole} onValueChange={(value: 'customer' | 'agent') => setSelectedRole(value)}>
+                    <Select value={selectedRole} onValueChange={(value: UserRole) => setSelectedRole(value)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -224,7 +242,7 @@ const Auth = () => {
                         <SelectContent>
                           {agents.map((agent) => (
                             <SelectItem key={agent.user_id} value={agent.user_id}>
-                              {agent.profiles?.full_name || 'Unknown Agent'}
+                              {agent.profile?.full_name || 'Unknown Agent'}
                             </SelectItem>
                           ))}
                         </SelectContent>

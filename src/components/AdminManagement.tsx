@@ -23,10 +23,28 @@ const AdminManagement = () => {
         .from('user_roles')
         .select(`
           user_id,
-          role,
-          profiles!inner(full_name, phone, assigned_agent_id)
+          role
         `);
-      return data || [];
+      
+      if (!data) return [];
+
+      // Fetch profiles separately for each user
+      const usersWithProfiles = await Promise.all(
+        data.map(async (userRole) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, phone, assigned_agent_id')
+            .eq('id', userRole.user_id)
+            .single();
+          
+          return {
+            ...userRole,
+            profile
+          };
+        })
+      );
+
+      return usersWithProfiles;
     }
   });
 
@@ -107,8 +125,8 @@ const AdminManagement = () => {
                 agentUsers.map((agent) => (
                   <div key={agent.user_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
-                      <p className="font-medium">{agent.profiles?.full_name || 'Unknown'}</p>
-                      <p className="text-sm text-gray-600">{agent.profiles?.phone || 'No phone'}</p>
+                      <p className="font-medium">{agent.profile?.full_name || 'Unknown'}</p>
+                      <p className="text-sm text-gray-600">{agent.profile?.phone || 'No phone'}</p>
                     </div>
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                       Agent
@@ -136,9 +154,9 @@ const AdminManagement = () => {
                 customerUsers.map((customer) => (
                   <div key={customer.user_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
-                      <p className="font-medium">{customer.profiles?.full_name || 'Unknown'}</p>
+                      <p className="font-medium">{customer.profile?.full_name || 'Unknown'}</p>
                       <p className="text-xs text-gray-600">
-                        Agent: {customer.profiles?.assigned_agent_id ? 'Assigned' : 'None'}
+                        Agent: {customer.profile?.assigned_agent_id ? 'Assigned' : 'None'}
                       </p>
                     </div>
                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">

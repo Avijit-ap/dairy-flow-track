@@ -3,13 +3,16 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Database } from '@/integrations/supabase/types';
+
+type UserRole = Database['public']['Enums']['user_role'];
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   userRole: string | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, options?: { role?: string; assignedAgent?: string }) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, options?: { role?: UserRole; assignedAgent?: string }) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   inviteAgent: (email: string, fullName: string) => Promise<{ error: any }>;
@@ -67,7 +70,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, options?: { role?: string; assignedAgent?: string }) => {
+  const signUp = async (email: string, password: string, fullName: string, options?: { role?: UserRole; assignedAgent?: string }) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { data, error } = await supabase.auth.signUp({
@@ -77,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         emailRedirectTo: redirectUrl,
         data: {
           full_name: fullName,
-          role: options?.role || 'customer',
+          role: options?.role || 'customer' as UserRole,
           assigned_agent: options?.assignedAgent
         }
       }
@@ -156,7 +159,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
         data: {
           full_name: fullName,
-          role: 'agent'
+          role: 'agent' as UserRole
         },
         redirectTo: `${window.location.origin}/`
       });
