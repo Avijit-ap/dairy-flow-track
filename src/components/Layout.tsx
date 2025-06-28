@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Home, BarChart3, Users, Package, MapPin, Bell, User, LogOut } from 'lucide-react';
+import { Home, BarChart3, Users, Package, MapPin, Bell, User, LogOut, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const Layout = ({ children }: LayoutProps) => {
-  const { user, userRole, signOut, loading } = useAuth();
+  const { user, userRole, profile, signOut, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -25,17 +25,47 @@ const Layout = ({ children }: LayoutProps) => {
     return <Navigate to="/auth" replace />;
   }
 
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home, roles: ['admin', 'distributor', 'agent', 'customer'] },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['admin'] },
-    { name: 'Areas & Agents', href: '/areas', icon: MapPin, roles: ['admin', 'distributor'] },
-    { name: 'Deliveries', href: '/deliveries', icon: Package, roles: ['admin', 'agent'] },
-    { name: 'Subscriptions', href: '/subscriptions', icon: Users, roles: ['admin', 'customer', 'distributor'] },
-  ];
+  const getNavigation = () => {
+    const baseNav = [
+      { name: 'Dashboard', href: '/', icon: Home, roles: ['admin', 'super_admin', 'agent', 'customer'] }
+    ];
 
-  const filteredNavigation = navigation.filter(item => 
-    userRole && item.roles.includes(userRole)
-  );
+    const roleSpecificNav = {
+      super_admin: [
+        { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+        { name: 'Areas & Agents', href: '/areas', icon: MapPin },
+        { name: 'Deliveries', href: '/deliveries', icon: Package },
+        { name: 'Subscriptions', href: '/subscriptions', icon: Users },
+      ],
+      admin: [
+        { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+        { name: 'Areas & Agents', href: '/areas', icon: MapPin },
+        { name: 'Deliveries', href: '/deliveries', icon: Package },
+        { name: 'Subscriptions', href: '/subscriptions', icon: Users },
+      ],
+      agent: [
+        { name: 'My Deliveries', href: '/deliveries', icon: Package },
+        { name: 'My Customers', href: '/subscriptions', icon: Users },
+      ],
+      customer: [
+        { name: 'My Orders', href: '/subscriptions', icon: ShoppingCart },
+      ]
+    };
+
+    return [...baseNav, ...(roleSpecificNav[userRole as keyof typeof roleSpecificNav] || [])];
+  };
+
+  const navigation = getNavigation();
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'super_admin': return 'bg-purple-100 text-purple-800';
+      case 'admin': return 'bg-blue-100 text-blue-800';
+      case 'agent': return 'bg-green-100 text-green-800';
+      case 'customer': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -50,8 +80,8 @@ const Layout = ({ children }: LayoutProps) => {
                 </div>
               </div>
               <div className="ml-3">
-                <h1 className="text-xl font-bold text-gray-900">MilkTrack Pro</h1>
-                <p className="text-sm text-gray-500">Delivery Management System</p>
+                <h1 className="text-xl font-bold text-gray-900">MilkTrackr</h1>
+                <p className="text-sm text-gray-500">Government Milk Delivery System</p>
               </div>
             </div>
             
@@ -62,9 +92,17 @@ const Layout = ({ children }: LayoutProps) => {
               </Button>
               <div className="flex items-center space-x-2">
                 <User className="h-6 w-6 text-gray-400" />
-                <span className="text-sm font-medium text-gray-700 capitalize">
-                  {userRole || 'User'} - {user.email}
-                </span>
+                <div className="text-right">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {profile?.full_name || user.email}
+                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userRole || '')}`}>
+                      {userRole?.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
                 <Button variant="ghost" size="sm" onClick={signOut}>
                   <LogOut className="h-4 w-4" />
                 </Button>
@@ -79,7 +117,7 @@ const Layout = ({ children }: LayoutProps) => {
         <nav className="bg-white shadow-sm w-64 min-h-screen">
           <div className="p-6">
             <div className="space-y-2">
-              {filteredNavigation.map((item) => {
+              {navigation.map((item) => {
                 const isActive = location.pathname === item.href;
                 return (
                   <Link

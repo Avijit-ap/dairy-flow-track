@@ -4,6 +4,9 @@ import DashboardCard from '@/components/DashboardCard';
 import DeliveryTable from '@/components/DeliveryTable';
 import DataControls from '@/components/DataControls';
 import AdminManagement from '@/components/AdminManagement';
+import CustomerDashboard from '@/components/CustomerDashboard';
+import AgentDashboard from '@/components/AgentDashboard';
+import ProductCatalog from '@/components/ProductCatalog';
 import { Package, Users, MapPin, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,7 +17,7 @@ const Index = () => {
   const { userRole } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch dashboard stats
+  // Fetch dashboard stats for admin/super_admin
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
@@ -50,11 +53,14 @@ const Index = () => {
         pendingDeliveries: totalToday - deliveredToday
       };
     },
-    refetchInterval: 5000 // Refresh every 5 seconds
+    refetchInterval: 5000,
+    enabled: userRole === 'admin' || userRole === 'super_admin'
   });
 
   // Set up realtime subscription for dashboard updates
   useEffect(() => {
+    if (userRole !== 'admin' && userRole !== 'super_admin') return;
+
     const channel = supabase
       .channel('dashboard-updates')
       .on(
@@ -84,21 +90,42 @@ const Index = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, userRole]);
 
+  // Render based on user role
+  if (userRole === 'customer') {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          <CustomerDashboard />
+          <ProductCatalog />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (userRole === 'agent') {
+    return (
+      <Layout>
+        <AgentDashboard />
+      </Layout>
+    );
+  }
+
+  // Admin/Super Admin Dashboard
   return (
     <Layout>
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard Overview</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {userRole === 'super_admin' ? 'Super Admin Dashboard' : 'Admin Dashboard'}
+          </h1>
           <p className="text-gray-600">Monitor your milk delivery operations in real-time</p>
-          {userRole === 'admin' && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
-              <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
-              Real-time updates enabled
-            </div>
-          )}
+          <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+            <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
+            Real-time updates enabled
+          </div>
         </div>
 
         {/* Key Metrics */}
@@ -164,20 +191,21 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Data Controls - Only show for admin */}
-          {userRole === 'admin' && <DataControls />}
+          {/* Data Controls - Only show for admin/super_admin */}
+          <DataControls />
         </div>
 
         {/* Admin Management Section */}
-        {userRole === 'admin' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">User Management</h2>
-              <p className="text-gray-600">Manage agents and view customer information</p>
-            </div>
-            <AdminManagement />
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Management</h2>
+            <p className="text-gray-600">Manage agents, customers, and system data</p>
           </div>
-        )}
+          <AdminManagement />
+        </div>
+
+        {/* Product Catalog for Admins */}
+        <ProductCatalog />
 
         {/* Delivery Management */}
         <DeliveryTable />
