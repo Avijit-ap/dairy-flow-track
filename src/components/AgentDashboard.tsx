@@ -23,15 +23,35 @@ const AgentDashboard = () => {
           *,
           subscriptions (
             quantity,
-            products (name, price),
-            profiles (full_name, address, phone)
+            user_id,
+            products (name, price)
           )
         `)
         .eq('agent_id', user?.id)
         .eq('delivery_date', today)
         .order('status', { ascending: true });
       if (error) throw error;
-      return data;
+
+      // Get customer profiles separately
+      const deliveriesWithProfiles = await Promise.all(
+        (data || []).map(async (delivery) => {
+          if (delivery.subscriptions?.user_id) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, address, phone')
+              .eq('id', delivery.subscriptions.user_id)
+              .single();
+            
+            return {
+              ...delivery,
+              customer_profile: profileData
+            };
+          }
+          return delivery;
+        })
+      );
+
+      return deliveriesWithProfiles;
     },
     enabled: !!user,
     refetchInterval: 10000,
@@ -61,17 +81,32 @@ const AgentDashboard = () => {
         .from('profiles')
         .select(`
           *,
-          areas (name),
-          subscriptions!inner (
-            id,
-            status,
-            products (name)
-          )
+          areas (name)
         `)
-        .eq('assigned_agent_id', user?.id)
-        .eq('subscriptions.status', 'active');
+        .eq('assigned_agent_id', user?.id);
       if (error) throw error;
-      return data;
+
+      // Get active subscriptions for each customer
+      const customersWithSubscriptions = await Promise.all(
+        (data || []).map(async (customer) => {
+          const { data: subscriptions } = await supabase
+            .from('subscriptions')
+            .select(`
+              id,
+              status,
+              products (name)
+            `)
+            .eq('user_id', customer.id)
+            .eq('status', 'active');
+          
+          return {
+            ...customer,
+            subscriptions: subscriptions || []
+          };
+        })
+      );
+
+      return customersWithSubscriptions.filter(customer => customer.subscriptions.length > 0);
     },
     enabled: !!user,
   });
@@ -208,16 +243,16 @@ const AgentDashboard = () => {
                           {delivery.status}
                         </Badge>
                         <h3 className="font-medium">
-                          {delivery.subscriptions?.profiles?.full_name || 'Unknown Customer'}
+                          {delivery.customer_profile?.full_name || 'Unknown Customer'}
                         </h3>
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {delivery.subscriptions?.profiles?.address || 'No address'}
+                          {delivery.customer_profile?.address || 'No address'}
                         </div>
                         <p>Product: {delivery.subscriptions?.products?.name} ({delivery.subscriptions?.quantity}L)</p>
-                        <p>Phone: {delivery.subscriptions?.profiles?.phone || 'No phone'}</p>
+                        <p>Phone: {delivery.customer_profile?.phone || 'No phone'}</p>
                       </div>
                     </div>
                     {delivery.status === 'scheduled' && (
@@ -250,7 +285,7 @@ const AgentDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Assigned Areas */}
+      {/* Assigned Areas and Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>

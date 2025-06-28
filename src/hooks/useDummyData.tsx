@@ -66,11 +66,11 @@ export const useDummyData = () => {
       // Insert test profiles
       await supabase.from('profiles').upsert(testProfiles, { onConflict: 'id' });
 
-      // Create user roles for test profiles
+      // Create user roles for test profiles with proper type casting
       const testRoles = [
-        { user_id: testProfiles[0].id, role: 'agent' },
-        { user_id: testProfiles[1].id, role: 'customer' },
-        { user_id: testProfiles[2].id, role: 'customer' }
+        { user_id: testProfiles[0].id, role: 'agent' as const },
+        { user_id: testProfiles[1].id, role: 'customer' as const },
+        { user_id: testProfiles[2].id, role: 'customer' as const }
       ];
 
       await supabase.from('user_roles').upsert(testRoles, { onConflict: 'user_id' });

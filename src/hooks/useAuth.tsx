@@ -3,8 +3,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
+import { useToast } from '@/hooks/use-toast';
 
-type UserRole = Database['public']['Enums']['user_role'];
+type UserRole = Database['public']['Enums']['user_role'] | 'super_admin';
 
 interface AuthContextType {
   user: User | null;
@@ -13,7 +14,8 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, userData?: any) => Promise<void>;
+  signUp: (email: string, password: string, userData?: any) => Promise<{ error: any }>;
+  inviteAgent: (email: string, name: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchUserData = async (userId: string) => {
     try {
@@ -98,7 +101,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data: userData,
       },
     });
-    if (error) throw error;
+    return { error };
+  };
+
+  const inviteAgent = async (email: string, name: string) => {
+    try {
+      // Send magic link invitation
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          data: { 
+            full_name: name, 
+            role: 'agent' 
+          }
+        }
+      });
+
+      if (error) {
+        toast({
+          title: "Invitation Failed",
+          description: error.message,
+          variant: "destructive"
+        });
+        return { error };
+      }
+
+      toast({
+        title: "Invitation Sent",
+        description: `Magic link sent to ${email}`,
+      });
+
+      return { error: null };
+    } catch (error) {
+      console.error('Invite error:', error);
+      return { error };
+    }
   };
 
   const value = {
@@ -109,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     signIn,
     signUp,
+    inviteAgent,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

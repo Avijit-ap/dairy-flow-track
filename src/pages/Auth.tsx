@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
@@ -11,9 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Package } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Database } from '@/integrations/supabase/types';
 
-type UserRole = Database['public']['Enums']['user_role'];
+type UserRole = 'customer' | 'agent';
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
@@ -70,7 +68,11 @@ const Auth = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    await signIn(email, password);
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      console.error('Sign in error:', error);
+    }
     setIsLoading(false);
   };
 
@@ -78,10 +80,19 @@ const Auth = () => {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signUp(email, password, fullName, {
-      role: selectedRole,
-      assignedAgent: selectedRole === 'customer' ? selectedAgent : undefined
-    });
+    try {
+      const { error } = await signUp(email, password, {
+        full_name: fullName,
+        role: selectedRole,
+        assignedAgent: selectedRole === 'customer' ? selectedAgent : undefined
+      });
+      
+      if (error) {
+        console.error('Sign up error:', error);
+      }
+    } catch (error) {
+      console.error('Sign up error:', error);
+    }
     
     setIsLoading(false);
   };
@@ -97,14 +108,14 @@ const Auth = () => {
                 <Package className="h-8 w-8 text-white" />
               </div>
               <div className="ml-3">
-                <CardTitle className="text-2xl">MilkTrack Pro</CardTitle>
-                <p className="text-gray-600">Delivery Management System</p>
+                <CardTitle className="text-2xl">MilkTrackr</CardTitle>
+                <p className="text-gray-600">Government Milk Delivery System</p>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="font-semibold text-lg mb-2">Welcome to MilkTrack Pro</h3>
+              <h3 className="font-semibold text-lg mb-2">Welcome to MilkTrackr</h3>
               <p className="text-gray-600">
                 Your comprehensive milk delivery management solution designed to streamline operations 
                 from subscription management to delivery tracking.
