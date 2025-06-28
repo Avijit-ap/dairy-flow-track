@@ -8,6 +8,29 @@ import { Package, Clock, CheckCircle, XCircle, MapPin, Users } from 'lucide-reac
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
+interface DeliveryWithProfile {
+  id: string;
+  delivery_date: string;
+  status: string;
+  notes: string | null;
+  delivered_at: string | null;
+  agent_id: string | null;
+  subscription_id: string;
+  subscriptions: {
+    quantity: number;
+    user_id: string;
+    products: {
+      name: string;
+      price: number;
+    };
+  } | null;
+  customer_profile?: {
+    full_name: string | null;
+    address: string | null;
+    phone: string | null;
+  } | null;
+}
+
 const AgentDashboard = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -15,7 +38,7 @@ const AgentDashboard = () => {
 
   const { data: todayDeliveries } = useQuery({
     queryKey: ['agent-deliveries', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<DeliveryWithProfile[]> => {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('deliveries')
@@ -30,10 +53,11 @@ const AgentDashboard = () => {
         .eq('agent_id', user?.id)
         .eq('delivery_date', today)
         .order('status', { ascending: true });
+      
       if (error) throw error;
 
       // Get customer profiles separately
-      const deliveriesWithProfiles = await Promise.all(
+      const deliveriesWithProfiles: DeliveryWithProfile[] = await Promise.all(
         (data || []).map(async (delivery) => {
           if (delivery.subscriptions?.user_id) {
             const { data: profileData } = await supabase
@@ -47,7 +71,10 @@ const AgentDashboard = () => {
               customer_profile: profileData
             };
           }
-          return delivery;
+          return {
+            ...delivery,
+            customer_profile: null
+          };
         })
       );
 
